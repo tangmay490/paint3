@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>ArtPad</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg"><link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#14122b">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<style>
+:root{--ink:#14122b;--panel:#211e40;--line:#3a3663;--pink:#ff4f81;--teal:#16c7b5;--sun:#ffd23f;--txt:#f4f1ff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:var(--ink);color:var(--txt);font-family:"Sarabun","Noto Sans Thai",system-ui,sans-serif;overflow:hidden;overscroll-behavior:none}
+button{font:inherit;color:inherit;cursor:pointer}
+#splash{position:fixed;inset:0;z-index:9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(circle at 20% 15%,#ff4f8155,transparent 45%),radial-gradient(circle at 85% 85%,#16c7b544,transparent 45%),var(--ink);transition:opacity .5s,visibility .5s}
+#splash.hide{opacity:0;visibility:hidden}
+#splash svg{width:min(72vw,340px);overflow:visible}
+.st{fill:none;stroke-linecap:round;stroke-width:16;stroke-dasharray:1;stroke-dashoffset:1;animation:draw 2s cubic-bezier(.6,.05,.3,1) forwards}
+.st.b{stroke:var(--teal);animation-delay:.25s}.st.c{stroke:var(--sun);animation-delay:.5s}
+@keyframes draw{to{stroke-dashoffset:0}}
+#splash h1{margin:0;font-size:2.4rem;letter-spacing:.02em}
+#splash p{margin:0;opacity:.7}
+@media(prefers-reduced-motion:reduce){.st{animation-duration:.01s}}
+#app{display:flex;flex-direction:column;height:100dvh;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+header{display:flex;align-items:center;gap:6px;padding:8px 10px}
+header b{font-size:1.15rem;margin-right:auto}
+.ib{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:.95rem}
+.ib:active{transform:scale(.95)}
+#save{background:var(--pink);border-color:var(--pink);color:#fff;font-weight:600}
+#inst{display:none}
+#paper{flex:1;position:relative;margin:0 10px;border-radius:6px;overflow:hidden;background:#fff;box-shadow:0 8px 30px #0008}
+canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+#panel{background:var(--panel);border-top:1px solid var(--line);margin-top:10px;padding:10px;display:grid;gap:10px}
+.row{display:flex;gap:8px;align-items:center;overflow-x:auto;scrollbar-width:none}
+.tool{flex:1;min-width:64px;background:transparent;border:2px solid var(--line);border-radius:12px;padding:6px 4px;display:grid;justify-items:center;font-size:.8rem}
+.tool span{font-size:1.4rem}
+.tool.on{border-color:var(--sun);background:#ffd23f22}
+.sw{flex:0 0 30px;height:30px;border-radius:50%;border:3px solid var(--panel);outline:2px solid var(--line);padding:0}
+.sw.on{outline:3px solid #fff}
+#cur{flex:0 0 38px;height:38px;border-radius:10px;border:2px solid #fff;padding:0;background:none}
+#size{flex:1;min-width:90px;accent-color:var(--pink)}
+#dot{flex:0 0 44px;height:44px;display:grid;place-items:center}
+#dot i{display:block;border-radius:50%;background:#fff}
+#toast{position:fixed;left:50%;bottom:150px;transform:translate(-50%,20px);background:var(--teal);color:#062;padding:8px 16px;border-radius:99px;font-weight:600;opacity:0;transition:.3s;pointer-events:none}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+</style></head><body>
+<div id="splash">
+ <svg viewBox="0 0 300 120"><path class="st" pathLength="1" d="M20 80C60 10 100 10 120 60S170 110 200 50 250 20 280 60"/><path class="st b" pathLength="1" d="M30 100C90 70 150 105 280 90" /><path class="st c" pathLength="1" d="M60 30C120 45 190 20 250 35"/></svg>
+ <h1>ArtPad</h1><p>ผืนผ้าใบของคุณ พร้อมแล้ว</p>
+</div>
+<div id="app">
+ <header><b>ArtPad</b>
+  <button class="ib" id="inst">ติดตั้ง</button>
+  <button class="ib" id="undo">ย้อนกลับ</button>
+  <button class="ib" id="clear">ล้าง</button>
+  <button class="ib" id="save">บันทึกรูป</button></header>
+ <div id="paper"><canvas id="cv"></canvas></div>
+ <div id="panel">
+  <div class="row" id="tools"></div>
+  <div class="row" id="colors"></div>
+  <div class="row"><span>ขนาด</span><input type="range" id="size" min="1" max="60" value="8"><div id="dot"><i></i></div></div>
+ </div>
+</div><div id="toast"></div>
+<script>
+const $=s=>document.querySelector(s),cv=$('#cv'),ctx=cv.getContext('2d',{willReadFrequently:true}),paper=$('#paper');
+const TOOLS={pencil:['✏️','ดินสอ',.5,.75,0],pen:['🖊️','ปากกา',1,1,0],marker:['🖍️','มาร์คเกอร์',2.6,.4,0],brush:['🖌️','พู่กัน',2,.85,.5],eraser:['🧽','ยางลบ',2.5,1,0]};
+const PAL=['#1a1a1a','#ffffff','#e63946','#ff8c42','#ffd23f','#7bc950','#16c7b5','#2f80ed','#6a4cff','#ff4f81','#8d5a3b','#9aa0a6'];
+let tool='pen',color='#1a1a1a',size=8,pts=[],snap=null,hist=[],drawing=false,raf=0;
+// UI
+const tb=$('#tools'),cb=$('#colors');
+for(const k in TOOLS){const b=document.createElement('button');b.className='tool';b.dataset.k=k;b.innerHTML=`<span>${TOOLS[k][0]}</span>${TOOLS[k][1]}`;b.onclick=()=>{tool=k;sync()};tb.append(b)}
+const cur=document.createElement('input');cur.type='color';cur.id='cur';cur.value=color;cur.oninput=()=>{color=cur.value;if(tool==='eraser')tool='pen';sync()};cb.append(cur);
+PAL.forEach(c=>{const b=document.createElement('button');b.className='sw';b.style.background=c;b.dataset.c=c;b.onclick=()=>{color=c;cur.value=c;if(tool==='eraser')tool='pen';sync()};cb.append(b)});
+$('#size').oninput=e=>{size=+e.target.value;sync()};
+function sync(){document.querySelectorAll('.tool').forEach(b=>b.classList.toggle('on',b.dataset.k===tool));
+ document.querySelectorAll('.sw').forEach(b=>b.classList.toggle('on',b.dataset.c===color));
+ const d=Math.min(40,Math.max(3,size*TOOLS[tool][2]));const i=$('#dot i');i.style.cssText=`width:${d}px;height:${d}px;background:${tool==='eraser'?'#fff':color};opacity:${TOOLS[tool][3]};box-shadow:0 0 0 1px #fff5`}
+// canvas
+function fit(){const r=paper.getBoundingClientRect(),d=devicePixelRatio||1,w=Math.round(r.width*d),h=Math.round(r.height*d);
+ if(!w||!h||(cv.width===w&&cv.height===h))return;
+ const t=document.createElement('canvas');t.width=cv.width;t.height=cv.height;if(cv.width)t.getContext('2d').drawImage(cv,0,0);
+ cv.width=w;cv.height=h;ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);if(t.width)ctx.drawImage(t,0,0);ctx.setTransform(d,0,0,d,0,0);hist=[]}
+addEventListener('resize',fit);
+const P=e=>{const r=cv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}};
+function render(){raf=0;ctx.putImageData(snap,0,0);const[,,w,a,bl]=TOOLS[tool],c=tool==='eraser'?'#fff':color;
+ ctx.save();ctx.globalAlpha=a;ctx.lineCap=ctx.lineJoin='round';ctx.lineWidth=size*w;ctx.strokeStyle=ctx.fillStyle=c;
+ if(bl){ctx.shadowColor=c;ctx.shadowBlur=size*bl}
+ if(pts.length<2){ctx.beginPath();ctx.arc(pts[0].x,pts[0].y,ctx.lineWidth/2,0,7);ctx.fill()}
+ else{ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
+  for(let i=1;i<pts.length-1;i++){ctx.quadraticCurveTo(pts[i].x,pts[i].y,(pts[i].x+pts[i+1].x)/2,(pts[i].y+pts[i+1].y)/2)}
+  const l=pts[pts.length-1];ctx.lineTo(l.x,l.y);ctx.stroke()}
+ ctx.restore()}
+cv.addEventListener('pointerdown',e=>{e.preventDefault();cv.setPointerCapture(e.pointerId);drawing=true;
+ snap=ctx.getImageData(0,0,cv.width,cv.height);hist.push(snap);if(hist.length>25)hist.shift();pts=[P(e)];raf=raf||requestAnimationFrame(render)});
+cv.addEventListener('pointermove',e=>{if(!drawing)return;(e.getCoalescedEvents?e.getCoalescedEvents():[e]).forEach(x=>pts.push(P(x)));raf=raf||requestAnimationFrame(render)});
+const end=()=>{drawing=false};cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
+$('#undo').onclick=()=>{if(hist.length)ctx.putImageData(hist.pop(),0,0)};
+$('#clear').onclick=()=>{hist.push(ctx.getImageData(0,0,cv.width,cv.height));ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);ctx.restore();toast('ล้างผืนผ้าใบแล้ว')};
+$('#save').onclick=()=>cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='artpad-'+Date.now()+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);toast('บันทึกรูปแล้ว')},'image/png');
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
+// splash 2s -> app
+fit();sync();
+setTimeout(()=>{$('#splash').classList.add('hide');fit()},2000);
+// PWA
+if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+let dp;addEventListener('beforeinstallprompt',e=>{e.preventDefault();dp=e;$('#inst').style.display='block'});
+$('#inst').onclick=async()=>{if(!dp)return;dp.prompt();await dp.userChoice;dp=null;$('#inst').style.display='none'};
+</script></body></html>
